@@ -2,6 +2,10 @@ package org.geektimes.projects.user.sql;
 
 import org.geektimes.projects.user.domain.User;
 
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import javax.sql.DataSource;
 import java.beans.BeanInfo;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
@@ -21,13 +25,13 @@ import java.util.ServiceLoader;
 public class DBConnectionManager {
 
     /**
-     * 1、如果要测试的话，需要修改DB的路径为你本机可访问的目录。
-     * 2、Derby只能本一个实例连接，所以如果要用客户端连接数据库查看结果，需要终止已有的连接。
+     * 1、如果要测试的话，需要修改DB的路径为你本机可访问的目录。<br>
+     * 2、Derby只能本一个实例连接，所以如果要用客户端连接数据库查看结果，需要终止已有的连接。<br>
      * 3、使用客户端连接的时候，注意配置的路径要一致，不要在创建的时候使用了相对路径，然后在客户端中也配置相对路径，
      * 这样的话肯定是连不上你通过application创建的DB的。
      */
-    public static final String DATABASE_URL = "jdbc:derby:/Users/fanggang/Documents/Geek/小马哥/github" +
-            "/geekbang-lessons/projects/stage-0/user-platform/db/users;create=true";
+    public static final String DATABASE_URL = "jdbc:derby:" + System.getProperty("user.home") +
+            "/Documents/Geek/小马哥/github/user-platform" + "/db/users;create=true";
 
     public static final String DROP_USERS_TABLE_DDL_SQL = "DROP TABLE users";
 
@@ -67,24 +71,53 @@ public class DBConnectionManager {
              *
              * 获取 connection 方式2：
              * Connection connection = DriverManager.getConnection(DATABASE_URL);
+             *
+             * 获取 connection 方式3 - JNDI：
+             * 参看下面 getConn() 方法
              */
-            for (Driver driver : ServiceLoader.load(Driver.class)) {
+            /*for (Driver driver : ServiceLoader.load(Driver.class)) {
                 DriverManager.registerDriver(driver);
             }
             Connection connection = DriverManager.getConnection(DATABASE_URL);
             initTables(connection);
-        } catch (SQLException e) {
+            */
+
+            // JNDI
+            initTables(getConn());
+        } catch (SQLException | NamingException e) {
             // TODO
             e.printStackTrace();
         }
     }
 
+    private static Connection getConn() throws NamingException, SQLException {
+        // Obtain our environment naming context
+        Context initCtx = new InitialContext();
+        Context envCtx = (Context) initCtx.lookup("java:comp/env");
+
+        // Look up our data source
+        DataSource ds = (DataSource) envCtx.lookup("jdbc/UserPlatformDB");
+
+        // Allocate and use a connection from the pool
+        return ds.getConnection();
+    }
+
     public Connection getConnection() {
-        try {
+        /*try {
             return this.connection = DriverManager.getConnection(DATABASE_URL);
         } catch (SQLException e) {
             throw new RuntimeException(e);
+        }*/
+
+        // JNDI 方式获取 connection
+        try {
+            return getConn();
+        } catch (NamingException e) {
+            e.printStackTrace();
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
         }
+        return null;
     }
 
     public void setConnection(Connection connection) {
